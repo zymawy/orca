@@ -13,8 +13,10 @@ const mocks = vi.hoisted(() => ({
     installed: false,
     loading: false,
     settled: true,
+    installedUnverifiable: false,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   },
   sentryStatus: vi.fn()
@@ -98,8 +100,10 @@ beforeEach(() => {
     installed: true,
     loading: false,
     settled: true,
+    installedUnverifiable: false,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   }
 })
@@ -197,5 +201,13 @@ describe('useTaskSourceProviderReadiness', () => {
       resolveFirst?.({ connected: false })
     })
     expect(latest?.sentry.connected).toBe(true)
+  })
+
+  it('carries an unverifiable skill scan through to Linear readiness', async () => {
+    mocks.skill = { ...mocks.skill, installed: false, installedUnverifiable: true }
+    await renderProbe()
+
+    expect(latest?.linear.skillInstalled).toBe(false)
+    expect(latest?.linear.skillUnverifiable).toBe(true)
   })
 })

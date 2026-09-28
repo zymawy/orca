@@ -12,122 +12,119 @@ const stubPath = join(projectDir, 'skills', 'computer-use', 'SKILL.md')
 const bundledGuide = BUNDLED_SKILL_GUIDES.find((guide) => guide.name === 'computer-use')?.markdown
 
 describe('computer-use skill guidance', () => {
-  it('keeps discovery scoped to desktop control and out of the embedded browser', () => {
-    const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(readFileSync(guidePath, 'utf8'))?.[1] ?? ''
-    const description = frontmatter.replace(/\s+/gu, ' ')
+	it('keeps discovery scoped to last-resort GUI and out of the embedded browser', () => {
+		const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(readFileSync(guidePath, 'utf8'))?.[1] ?? ''
+		const description = frontmatter.replace(/\s+/gu, ' ')
 
-    expect(description).toContain('OS/window-level inspection and input')
-    expect(description).toContain('external browser window')
-    expect(description).toContain("Do not use for Orca's embedded browser")
-    expect(description).toContain('page-only browser automation')
-    expect(description).toContain("`orca-cli` for Orca's embedded pages")
-    expect(description).toContain(
-      'page-automation tool such as Playwright or CDP for external pages'
-    )
-    expect(description).not.toContain('read Slack')
-    expect(description).not.toContain('get app state')
+		expect(description).toContain('Drives the GUI of a visible local app window')
+		expect(description).toContain(
+			'Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task.'
+		)
+		expect(description).toContain(
+			'Use only when a visible window needs GUI control those cannot reach.'
+		)
+		expect(description).toContain('external browser windows')
+		expect(description).toContain("Do not use for Orca's embedded browser (`orca-cli`)")
+		expect(description).not.toMatch(/Playwright/iu)
+		expect(description).not.toContain('page-only')
+		expect(description).not.toContain('OS/window-level')
+		expect(description).not.toContain('Desktop or Documents')
+		expect(description).not.toContain('read Slack')
+		expect(description).not.toContain('get app state')
+	})
 
-    const orcaCli = readFileSync(join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8').replace(
-      /\s+/gu,
-      ' '
-    )
-    expect(orcaCli).toContain('browser embedded inside the Orca app')
-  })
+	it('keeps web-app targeting on the computer-use surface', () => {
+		const skill = readFileSync(guidePath, 'utf8')
 
-  it('keeps web-app targeting on the computer-use surface', () => {
-    const skill = readFileSync(guidePath, 'utf8')
+		expect(skill).toContain('Use this skill to drive a visible app window through `orca computer`')
+		expect(skill).toContain(
+			'Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task'
+		)
+		expect(skill).toContain(
+			'use this skill only when a visible window needs GUI control those cannot reach'
+		)
+		expect(skill).toContain('browser windows (Chrome, Edge, Safari)')
+		expect(skill).not.toMatch(/Playwright/iu)
+		expect(skill).not.toMatch(/\borca goto\b/iu)
+		expect(skill).not.toMatch(/\borca snapshot\b/iu)
+		expect(skill).not.toMatch(/\borca click\b/iu)
+		expect(skill).not.toMatch(/\borca fill\b/iu)
+	})
 
-    expect(skill).toContain('Use this skill for desktop UI through `orca computer`')
-    expect(skill).toContain('external desktop browser window that needs desktop-level control')
-    expect(skill).not.toContain('orca goto')
-    expect(skill).not.toContain('orca snapshot')
-    expect(skill).not.toContain('orca click')
-    expect(skill).not.toContain('orca fill')
-    expect(skill).not.toContain('Routing:')
-  })
+	it('warns agents to verify browser-hosted form focus before drafting text', () => {
+		const skill = readFileSync(guidePath, 'utf8')
 
-  it('warns agents to verify browser-hosted form focus before drafting text', () => {
-    const skill = readFileSync(guidePath, 'utf8')
+		expect(skill).toContain('For browser-hosted forms such as Gmail compose')
+		expect(skill).toContain('verify the focused UI element after each field action')
+		expect(skill).toContain('Prefer `paste-text` into the verified focused field')
+	})
 
-    expect(skill).toContain('For browser-hosted forms such as Gmail compose')
-    expect(skill).toContain('verify the focused UI element after each field action')
-    expect(skill).toContain('Prefer `paste-text` into the verified focused field')
-  })
+	it('warns agents about occluded Linux and Windows screenshots', () => {
+		const skill = readFileSync(guidePath, 'utf8')
 
-  it('warns agents about occluded Linux and Windows screenshots', () => {
-    const skill = readFileSync(guidePath, 'utf8')
+		expect(skill).toContain('On Linux and Windows')
+		expect(skill).toContain('use `--restore-window` so another window does not cover')
+		expect(skill).toContain('trust the tree over potentially occluded pixels')
+	})
 
-    expect(skill).toContain('On Linux and Windows')
-    expect(skill).toContain('use `--restore-window` so another window does not cover')
-    expect(skill).toContain('trust the tree over potentially occluded pixels')
-  })
+	it('points JSON users to the public accessibility-tree field', () => {
+		const skill = readFileSync(guidePath, 'utf8')
 
-  it('points JSON users to the public accessibility-tree field', () => {
-    const skill = readFileSync(guidePath, 'utf8')
+		expect(skill).toContain('`result.snapshot.treeText`')
+		expect(skill).not.toContain('`result.elements`')
+	})
 
-    expect(skill).toContain('`result.snapshot.treeText`')
-    expect(skill).not.toContain('`result.elements`')
-  })
+	it('explains how JSON and pretty output handle screenshots', () => {
+		expect(bundledGuide).toBeDefined()
 
-  it('explains how JSON and pretty output handle screenshots', () => {
-    expect(bundledGuide).toBeDefined()
+		for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
+			expect(skill).toContain('request screenshots by default unless `--no-screenshot`')
+			expect(skill).toContain('A successful `--json` capture')
+			expect(skill).toContain('`result.screenshot.path`')
+			expect(skill).toContain('inline base64 `result.screenshot.data`')
+			expect(skill).toContain('Pretty output does not save')
+		}
+	})
 
-    for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
-      expect(skill).toContain('request screenshots by default unless `--no-screenshot`')
-      expect(skill).toContain('A successful `--json` capture')
-      expect(skill).toContain('`result.screenshot.path`')
-      expect(skill).toContain('inline base64 `result.screenshot.data`')
-      expect(skill).toContain('Pretty output does not save')
-    }
-  })
+	it('requires atomic modifier-click actions in the source and bundled guide', () => {
+		expect(bundledGuide).toBeDefined()
 
-  it('requires atomic modifier-click actions in the source and bundled guide', () => {
-    expect(bundledGuide).toBeDefined()
-
-    for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
-      expect(skill).toContain('click --modifiers <chord>')
-      expect(skill).toContain('Never synthesize separate modifier-down and modifier-up commands')
-    }
-  })
+		for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
+			expect(skill).toContain('click --modifiers <chord>')
+			expect(skill).toContain('Never synthesize separate modifier-down and modifier-up commands')
+		}
+	})
 })
 
 describe('computer-use install stub', () => {
-  it('points at the version-matched guide and preserves the safe resolver', () => {
-    const stub = readFileSync(stubPath, 'utf8')
+	it('points at the version-matched guide and preserves the safe resolver', () => {
+		const stub = readFileSync(stubPath, 'utf8')
 
-    expect(stub).toContain('discovery stub')
-    expect(stub).toContain('ORCA skills get computer-use')
-    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
-    expect(stub).toContain('ORCA_CLI_COMMAND')
-    expect(stub).toContain('orca-dev')
-    expect(stub).toContain('orca-ide')
-    expect(stub).toContain('GNOME Orca screen reader')
-    expect(stub).not.toMatch(/^orca /mu)
-  })
+		expect(stub).toContain('discovery stub')
+		expect(stub).toContain('ORCA skills get computer-use')
+		// The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
+		expect(stub).toContain('ORCA_CLI_COMMAND')
+		expect(stub).toContain('orca-dev')
+		expect(stub).toContain('orca-ide')
+		expect(stub).toContain('GNOME Orca screen reader')
+		expect(stub).not.toMatch(/^orca /mu)
+	})
 
-  it('gives older binaries a bounded fallback instead of a dead end', () => {
-    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
+	it('drops the changing command reference from the installable file', () => {
+		const stub = readFileSync(stubPath, 'utf8')
+		const guide = readFileSync(guidePath, 'utf8')
 
-    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
-    expect(stub).toContain('do not invent commands')
-    expect(stub).toContain('ask the user rather than guessing')
-  })
+		// Version-sensitive command detail lives in the binary-served guide now, not here.
+		expect(stub).not.toContain('result.snapshot.treeText')
+		expect(stub).not.toContain('--restore-window')
+		expect(stub.length).toBeLessThan(guide.length)
+	})
 
-  it('drops the changing command reference from the installable file', () => {
-    const stub = readFileSync(stubPath, 'utf8')
-    const guide = readFileSync(guidePath, 'utf8')
+	it('keeps the routing frontmatter identical to the guide', () => {
+		const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
 
-    // Version-sensitive command detail lives in the binary-served guide now, not here.
-    expect(stub).not.toContain('result.snapshot.treeText')
-    expect(stub).not.toContain('--restore-window')
-    expect(stub.length).toBeLessThan(guide.length)
-  })
-
-  it('keeps the routing frontmatter identical to the guide', () => {
-    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
-
-    expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
-      frontmatter(readFileSync(guidePath, 'utf8'))
-    )
-  })
+		expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
+			frontmatter(readFileSync(guidePath, 'utf8'))
+		)
+	})
 })

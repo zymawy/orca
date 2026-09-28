@@ -38,7 +38,11 @@ import { join, resolve } from 'node:path'
 // `node_modules`). If electron-builder ever drops it, promote this to a
 // direct devDependency in package.json.
 import { extractFile, listPackage } from '@electron/asar'
-import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
+import {
+	BUILD_IDENTITY_RE,
+	MINIFIED_TELEMETRY_RE,
+	WRITE_KEY_RE
+} from './telemetry-bundle-constant-patterns.mjs'
 
 // Why resolve from import.meta.url instead of cwd: a release runner (or a
 // developer debugging locally) may invoke this script from a non-root cwd.
@@ -48,42 +52,42 @@ import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-pat
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 
 function findAsar(rootDir) {
-  // Why: electron-builder produces one `app.asar` per platform-arch combo.
-  // Linux/Windows targets ship one (`dist/linux-unpacked/resources/app.asar`,
-  // `dist/win-unpacked/resources/app.asar`); macOS dual-arch ships two
-  // (`dist/mac/Orca.app/Contents/Resources/app.asar` for x64,
-  // `dist/mac-arm64/Orca.app/Contents/Resources/app.asar` for arm64) because
-  // `electron-builder.config.cjs` declares `arch: ['x64', 'arm64']`. Both
-  // arches share the same JS bundle through electron-vite's single `main`
-  // build, so the constants are identical across them — but verifying every
-  // match catches the regression where one arch's pack drifts (e.g. a future
-  // arch-specific bundle split that forgets to thread the `define` block).
-  const matches = []
-  const stack = [rootDir]
-  while (stack.length > 0) {
-    const dir = stack.pop()
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        stack.push(fullPath)
-      } else if (entry.isFile() && entry.name === 'app.asar') {
-        matches.push(fullPath)
-      }
-    }
-  }
-  return matches
+	// Why: electron-builder produces one `app.asar` per platform-arch combo.
+	// Linux/Windows targets ship one (`dist/linux-unpacked/resources/app.asar`,
+	// `dist/win-unpacked/resources/app.asar`); macOS dual-arch ships two
+	// (`dist/mac/Orca.app/Contents/Resources/app.asar` for x64,
+	// `dist/mac-arm64/Orca.app/Contents/Resources/app.asar` for arm64) because
+	// `electron-builder.config.cjs` declares `arch: ['x64', 'arm64']`. Both
+	// arches share the same JS bundle through electron-vite's single `main`
+	// build, so the constants are identical across them — but verifying every
+	// match catches the regression where one arch's pack drifts (e.g. a future
+	// arch-specific bundle split that forgets to thread the `define` block).
+	const matches = []
+	const stack = [rootDir]
+	while (stack.length > 0) {
+		const dir = stack.pop()
+		let entries
+		try {
+			entries = readdirSync(dir, { withFileTypes: true })
+		} catch {
+			continue
+		}
+		for (const entry of entries) {
+			const fullPath = join(dir, entry.name)
+			if (entry.isDirectory()) {
+				stack.push(fullPath)
+			} else if (entry.isFile() && entry.name === 'app.asar') {
+				matches.push(fullPath)
+			}
+		}
+	}
+	return matches
 }
 
 const distDir = process.argv[2] ?? 'dist'
 if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
-  console.error(`::error::dist directory not found at ${distDir}`)
-  process.exit(1)
+	console.error(`::error::dist directory not found at ${distDir}`)
+	process.exit(1)
 }
 
 // Why: with `TELEMETRY_ENABLED = false` in source, Rollup eliminates the
@@ -94,26 +98,26 @@ const clientSrcPath = join(repoRoot, 'src/main/telemetry/client.ts')
 const clientSrc = readFileSync(clientSrcPath, 'utf8')
 const enabledMatch = /^const\s+TELEMETRY_ENABLED\s*=\s*(true|false)/m.exec(clientSrc)
 if (!enabledMatch) {
-  console.error(`::error::could not parse TELEMETRY_ENABLED flag from ${clientSrcPath}`)
-  process.exit(1)
+	console.error(`::error::could not parse TELEMETRY_ENABLED flag from ${clientSrcPath}`)
+	process.exit(1)
 }
 if (enabledMatch[1] === 'false') {
-  console.log(
-    'TELEMETRY_ENABLED is false in source — transport is dead-code-eliminated, ' +
-      'so the BUILD_IDENTITY/WRITE_KEY constants are not expected in the binary. ' +
-      'Skipping asar grep. (Once the flag flips to true, this verify becomes enforcing.)'
-  )
-  process.exit(0)
+	console.log(
+		'TELEMETRY_ENABLED is false in source — transport is dead-code-eliminated, ' +
+			'so the BUILD_IDENTITY/WRITE_KEY constants are not expected in the binary. ' +
+			'Skipping asar grep. (Once the flag flips to true, this verify becomes enforcing.)'
+	)
+	process.exit(0)
 }
 
 const asarMatches = findAsar(distDir)
 if (asarMatches.length === 0) {
-  console.error(`::error::could not locate app.asar under ${distDir}`)
-  process.exit(1)
+	console.error(`::error::could not locate app.asar under ${distDir}`)
+	process.exit(1)
 }
 console.log(`Found ${asarMatches.length} app.asar payload(s) under ${distDir}:`)
 for (const m of asarMatches) {
-  console.log(`  - ${m}`)
+	console.log(`  - ${m}`)
 }
 
 // Why these regexes: electron-vite's `define` block substitutes the bare
@@ -123,58 +127,64 @@ for (const m of asarMatches) {
 // and `WRITE_KEY`. Rollup may preserve `const` or lower it to `var`.
 
 function verifyAsar(asarPath) {
-  console.log(`Verifying ${asarPath}`)
+	console.log(`Verifying ${asarPath}`)
 
-  // Why list-then-extract (not a hardcoded path): future electron-vite
-  // chunking (e.g. `manualChunks`) could move the constants out of
-  // `out/main/index.js` into `out/main/chunks/telemetry-XYZ.js`. Enumerate
-  // every `.js` under `out/main/` and concatenate before grepping so the
-  // verify is resilient to chunking. listPackage builds entries with the
-  // host `path` module, so on Windows runners separators are backslashes
-  // (`\out\main\index.js`); normalize to forward slashes for the filter
-  // and strip the leading separator (of either kind) before passing the
-  // entry to extractFile.
-  const allEntries = listPackage(asarPath)
-  const mainJsEntries = allEntries.filter((p) => {
-    const normalized = p.replace(/\\/g, '/').replace(/^\/+/, '')
-    return normalized.startsWith('out/main/') && normalized.endsWith('.js')
-  })
+	// Why list-then-extract (not a hardcoded path): future electron-vite
+	// chunking (e.g. `manualChunks`) could move the constants out of
+	// `out/main/index.js` into `out/main/chunks/telemetry-XYZ.js`. Enumerate
+	// every `.js` under `out/main/` and concatenate before grepping so the
+	// verify is resilient to chunking. listPackage builds entries with the
+	// host `path` module, so on Windows runners separators are backslashes
+	// (`\out\main\index.js`); normalize to forward slashes for the filter
+	// and strip the leading separator (of either kind) before passing the
+	// entry to extractFile.
+	const allEntries = listPackage(asarPath)
+	const mainJsEntries = allEntries.filter((p) => {
+		const normalized = p.replace(/\\/g, '/').replace(/^\/+/, '')
+		return normalized.startsWith('out/main/') && normalized.endsWith('.js')
+	})
 
-  if (mainJsEntries.length === 0) {
-    console.error(`::error::no .js files found under out/main/ in ${asarPath}`)
-    return null
-  }
+	if (mainJsEntries.length === 0) {
+		console.error(`::error::no .js files found under out/main/ in ${asarPath}`)
+		return null
+	}
 
-  const indexJs = mainJsEntries
-    .map((entry) => {
-      // extractFile uses the host path module internally; pass the
-      // host-separator path with the leading separator stripped.
-      const internal = entry.replace(/^[\\/]+/, '')
-      return extractFile(asarPath, internal).toString('utf8')
-    })
-    .join('\n')
+	const indexJs = mainJsEntries
+		.map((entry) => {
+			// extractFile uses the host path module internally; pass the
+			// host-separator path with the leading separator stripped.
+			const internal = entry.replace(/^[\\/]+/, '')
+			return extractFile(asarPath, internal).toString('utf8')
+		})
+		.join('\n')
 
-  const buildIdentityMatch = BUILD_IDENTITY_RE.exec(indexJs)
-  const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
+	const buildIdentityMatch = BUILD_IDENTITY_RE.exec(indexJs)
+	const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
+	const minifiedTelemetryMatch = MINIFIED_TELEMETRY_RE.exec(indexJs)
 
-  if (!buildIdentityMatch) {
-    console.error(`::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`)
-    const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
-    for (const line of sample) {
-      console.error(`  ${line.slice(0, 200)}`)
-    }
-    return null
-  }
-  if (!writeKeyMatch) {
-    console.error(`::error::PostHog WRITE_KEY missing from ${asarPath}`)
-    const sample = indexJs.match(/.{0,80}WRITE_KEY.{0,80}/g)?.slice(0, 5) ?? []
-    for (const line of sample) {
-      console.error(`  ${line.slice(0, 200)}`)
-    }
-    return null
-  }
+	// Rolldown renames module-local constants in production output. In that
+	// form, verify the adjacent injected identity/key declaration instead.
+	const verifiedIdentity = buildIdentityMatch?.[1] ?? minifiedTelemetryMatch?.[1]
+	const verifiedWriteKey = writeKeyMatch?.[1] ?? minifiedTelemetryMatch?.[2]
 
-  return { asarPath, buildIdentity: buildIdentityMatch[1], writeKey: writeKeyMatch[1] }
+	if (!verifiedIdentity) {
+		console.error(`::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`)
+		const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
+		for (const line of sample) {
+			console.error(`  ${line.slice(0, 200)}`)
+		}
+		return null
+	}
+	if (!verifiedWriteKey) {
+		console.error(`::error::PostHog WRITE_KEY missing from ${asarPath}`)
+		const sample = indexJs.match(/.{0,80}WRITE_KEY.{0,80}/g)?.slice(0, 5) ?? []
+		for (const line of sample) {
+			console.error(`  ${line.slice(0, 200)}`)
+		}
+		return null
+	}
+
+	return { asarPath, buildIdentity: verifiedIdentity, writeKey: verifiedWriteKey }
 }
 
 // Why verify every match (not just the first): macOS dual-arch produces one
@@ -190,34 +200,34 @@ function verifyAsar(asarPath) {
 // release bugs.
 const results = []
 for (const asarPath of asarMatches) {
-  const result = verifyAsar(asarPath)
-  if (!result) {
-    process.exit(1)
-  }
-  results.push(result)
+	const result = verifyAsar(asarPath)
+	if (!result) {
+		process.exit(1)
+	}
+	results.push(result)
 }
 
 const distinctIdentities = new Set(results.map((r) => r.buildIdentity))
 if (distinctIdentities.size > 1) {
-  console.error(`::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`)
-  for (const r of results) {
-    console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
-  }
-  process.exit(1)
+	console.error(`::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`)
+	for (const r of results) {
+		console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
+	}
+	process.exit(1)
 }
 
 const distinctWriteKeys = new Set(results.map((r) => r.writeKey))
 if (distinctWriteKeys.size > 1) {
-  console.error(`::error::asars disagree on WRITE_KEY across arches`)
-  for (const r of results) {
-    console.error(`  - ${r.asarPath}: ${r.writeKey.slice(0, 8)}... (length=${r.writeKey.length})`)
-  }
-  process.exit(1)
+	console.error(`::error::asars disagree on WRITE_KEY across arches`)
+	for (const r of results) {
+		console.error(`  - ${r.asarPath}: ${r.writeKey.slice(0, 8)}... (length=${r.writeKey.length})`)
+	}
+	process.exit(1)
 }
 
 const [first] = results
 console.log(
-  `Telemetry constants verified across ${results.length} asar(s): ` +
-    `BUILD_IDENTITY="${first.buildIdentity}", ` +
-    `WRITE_KEY="${first.writeKey.slice(0, 8)}..." (length=${first.writeKey.length})`
+	`Telemetry constants verified across ${results.length} asar(s): ` +
+		`BUILD_IDENTITY="${first.buildIdentity}", ` +
+		`WRITE_KEY="${first.writeKey.slice(0, 8)}..." (length=${first.writeKey.length})`
 )

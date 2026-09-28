@@ -1,11 +1,11 @@
 import {
-  isRuntimePathAbsolute,
-  normalizeRuntimePathForComparison
+	isRuntimePathAbsolute,
+	normalizeRuntimePathForComparison
 } from '../../../src/shared/cross-platform-path'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
-  type AiVaultScope
+	AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+	type AiVaultScope
 } from '../../../src/shared/ai-vault-types'
 
 // Why: the renderer's deriveAiVault* helpers are renderer-located and
@@ -14,47 +14,51 @@ import {
 // the full worktree list via worktree.ps). scopePaths only widen the host scan's
 // discovery breadth; they are host-local match prefixes, never device paths.
 export function deriveMobileAiVaultScopePaths(
-  scope: AiVaultScope,
-  activeWorktree: Pick<Worktree, 'worktreeId' | 'path' | 'repoId'> | null,
-  liveWorktrees: readonly Pick<Worktree, 'worktreeId' | 'path' | 'repoId'>[]
+	scope: AiVaultScope,
+	activeWorktree: Pick<Worktree, 'worktreeId' | 'path' | 'repoId'> | null,
+	liveWorktrees: readonly Pick<Worktree, 'worktreeId' | 'path' | 'repoId'>[]
 ): string[] {
-  // 'all' scope scans without scope hints — the host returns the global recency
-  // list, so no scopePaths are needed (and would only narrow discovery).
-  if (scope === 'all' || !activeWorktree) {
-    return []
-  }
+	// 'all' scope scans without scope hints — the host returns the global recency
+	// list, so no scopePaths are needed (and would only narrow discovery).
+	if (scope === 'all' || !activeWorktree) {
+		return []
+	}
 
-  const paths: string[] = []
-  addScopePath(paths, activeWorktree.path)
+	const paths: string[] = []
+	const comparisonPaths = new Set<string>()
+	addScopePath(paths, comparisonPaths, activeWorktree.path)
 
-  // Workspace scope = the active worktree only. Project scope additionally
-  // covers same-repo sibling worktrees so the project view stays complete.
-  if (scope === 'project') {
-    for (const worktree of liveWorktrees) {
-      // Why: the RPC rejects (does not truncate) oversized scopePaths, and the
-      // list only widens discovery — dropping tail siblings beats hard-failing.
-      if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
-        break
-      }
-      if (worktree.repoId === activeWorktree.repoId) {
-        addScopePath(paths, worktree.path)
-      }
-    }
-  }
+	// Workspace scope = the active worktree only. Project scope additionally
+	// covers same-repo sibling worktrees so the project view stays complete.
+	if (scope === 'project') {
+		for (const worktree of liveWorktrees) {
+			// Why: the RPC rejects (does not truncate) oversized scopePaths, and the
+			// list only widens discovery — dropping tail siblings beats hard-failing.
+			if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
+				break
+			}
+			if (worktree.repoId === activeWorktree.repoId) {
+				addScopePath(paths, comparisonPaths, worktree.path)
+			}
+		}
+	}
 
-  return paths
+	return paths
 }
 
-function addScopePath(paths: string[], pathValue: string | undefined): void {
-  const trimmedPath = pathValue?.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
-    return
-  }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-  if (
-    paths.some((existingPath) => normalizeRuntimePathForComparison(existingPath) === comparisonPath)
-  ) {
-    return
-  }
-  paths.push(trimmedPath)
+function addScopePath(
+	paths: string[],
+	comparisonPaths: Set<string>,
+	pathValue: string | undefined
+): void {
+	const trimmedPath = pathValue?.trim()
+	if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
+		return
+	}
+	const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+	if (comparisonPaths.has(comparisonPath)) {
+		return
+	}
+	comparisonPaths.add(comparisonPath)
+	paths.push(trimmedPath)
 }
